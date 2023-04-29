@@ -34,6 +34,11 @@ public class CarLoanService {
 
 CarLoanController
 
+
+
+The bean 'carDetailsRepository', defined in in.sis.fetch.repository.CarDetailsRepository defined in @EnableJpaRepositories declared on JpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration, could not be registered. A bean with that name has already been defined in in.sis.fetch.repository.CarDetailsRepository defined in @EnableJdbcRepositories declared on JdbcRepositoriesRegistrar.EnableJdbcRepositoriesConfiguration and overriding is disabled.
+
+
 package com.example.demo.controller;
 
 import com.example.demo.model.CarDetails;
