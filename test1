@@ -1,0 +1,65 @@
+CarLoanService
+
+package com.example.demo.service;
+
+import com.example.demo.model.CarDetails;
+import com.example.demo.model.LoanEnquiry;
+import com.example.demo.repository.CarDetailsRepository;
+import com.example.demo.repository.LoanEnquiryRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CarLoanService {
+
+    private final CarDetailsRepository carDetailsRepository;
+    private final LoanEnquiryRepository loanEnquiryRepository;
+
+    @Autowired
+    public CarLoanService(CarDetailsRepository carDetailsRepository, LoanEnquiryRepository loanEnquiryRepository) {
+        this.carDetailsRepository = carDetailsRepository;
+        this.loanEnquiryRepository = loanEnquiryRepository;
+    }
+
+    public CarDetails getCarDetails(Long carId) {
+        return carDetailsRepository.findById(carId).orElse(null);
+    }
+
+    public LoanEnquiry getLoanEnquiry(Long customerId) {
+        return loanEnquiryRepository.findById(customerId).orElse(null);
+    }
+}
+
+
+
+CarLoanController
+
+package com.example.demo.controller;
+
+import com.example.demo.model.CarDetails;
+import com.example.demo.model.LoanEnquiry;
+import com.example.demo.service.CarLoanService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1")
+public class CarLoanController {
+
+    private final CarLoanService carLoanService;
+
+    @Autowired
+    public CarLoanController(CarLoanService carLoanService) {
+        this.carLoanService = carLoanService;
+    }
+
+    @GetMapping("/car-details/{id}")
+    public CarDetails getCarDetails(@PathVariable Long id) {
+        return carLoanService.getCarDetails(id);
+    }
+
+    @GetMapping("/loan-enquiry/{id}")
+    public LoanEnquiry getLoanEnquiry(@PathVariable Long id) {
+        return carLoanService.getLoanEnquiry(id);
+    }
+}
