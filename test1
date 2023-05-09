@@ -1,70 +1,503 @@
-CarLoanService
+  PROCEDURE ps_pr_val_enquiry_data (
+        iv_v_company_code   IN VARCHAR2,
+        iv_v_branch_code    IN VARCHAR2,
+        iv_v_enquiry_number IN VARCHAR2,
+        iv_v_mode_ind       IN VARCHAR2,
+        ov_v_error_code     OUT VARCHAR2,
+        ov_v_error_type     OUT VARCHAR2,
+        ov_v_error_mesg     OUT VARCHAR2
+    ) AS
 
-package com.example.demo.service;
+        lv_v_log_stage           ps_tb_error_log.log_stage%TYPE;
+        lv_v_enq_exists          VARCHAR2(2);
+    --srv
+        lv_v_repo_status         VARCHAR2(2);
+        lv_v_enquiry_status      ps_tb_ln_loan_enquiry_hdr.enquiry_status%TYPE;
+        lv_v_hunter_status       ps_tb_ln_loan_enquiry_hdr.hunter_result%TYPE;
+        lv_v_hunter_ver_status   ps_tb_ln_loan_enquiry_hdr.hunter_verification_result%TYPE;
+        lv_v_branch_code         ps_tb_branch_defn.branch_code%TYPE;
+        lv_v_cibil_status        ps_tb_ln_loan_enquiry_hdr.cibil_status%TYPE;
+        lv_v_ind_ext             CHAR(1);
+    --srv
+    --Patch added by Vigneshwaran K for CL1702 on 03-Mar-2020
+        lv_v_exists              VARCHAR2(1) := 'N';
+        lv_v_conf_ind            ps_tb_ln_loan_enquiry_hdr.cust_conf_ind%TYPE;
+        lv_v_usr_sms_ind         ps_tb_ln_loan_enquiry_hdr.sms_ind%TYPE;
+    --Patch ended by Vigneshwaran K for CL1702 on 03-Mar-2020
+    --Start Patch added by Kalaivani B for CL1720 on 22-03-2020
+        lv_v_sherlock_status     ps_tb_ln_loan_enquiry_hdr.sherlock_result%TYPE;
+        lv_v_sherlock_ver_status ps_tb_ln_loan_enquiry_hdr.sherlock_verification_result%TYPE;
+    --End Patch added by Kalaivani B for CL1720 on 22-03-2020
+        lv_v_cibil_unavail       VARCHAR2(1) := 'N';
+        lv_v_applnt_exists       VARCHAR2(1) := 'N';--Patch Added By Vigneshwaran K for CL1870_2 on 23-Jul-2020
+        lv_n_appl_status_cnt     NUMBER;  -- Patch Added by Anish Kumar S on 06-03-2021
+    BEGIN
+        ps_pk_error_log.ps_pr_start_error_log('Ps_Pk_Ln_Loan_Enquiry_Gen.Ps_Pr_Val_Enquiry_Data Starts');
+        lv_v_log_stage := 'In Ps_Pk_Ln_Loan_Enquiry_Gen.Ps_Pr_Val_Enquiry_Data, Checking whether Loan Application Created for Enqiury Number - '
+                          || iv_v_enquiry_number;
+        BEGIN
+            SELECT
+                'Y',
+                nvl(
+                    (
+                        SELECT
+                            'Y'
+                        FROM
+                            ps_tb_ln_loan_enquiry_dtls
+                        WHERE
+                                company_code = iv_v_company_code AND enquiry_number = iv_v_enquiry_number AND cibil_req_no IS NULL
+                        FETCH FIRST ROW ONLY
+                    ),
+                    'N'
+                ) --Patch Added By Vigneshwaran K for CL1870_2 on 23-Jul-2020
+            INTO
+                lv_v_enq_exists,
+                lv_v_cibil_unavail
+            FROM
+                ps_tb_ln_loan_application_dtls
+            WHERE
+                    company_code = iv_v_company_code AND enquiry_number = iv_v_enquiry_number
+            FETCH FIRST ROW ONLY;
 
-import com.example.demo.model.CarDetails;
-import com.example.demo.model.LoanEnquiry;
-import com.example.demo.repository.CarDetailsRepository;
-import com.example.demo.repository.LoanEnquiryRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+        EXCEPTION
+            WHEN no_data_found THEN
+                BEGIN
+                    SELECT
+                        'Y',
+                        nvl(
+                            (
+                                SELECT
+                                    'Y'
+                                FROM
+                                    ps_tb_ln_loan_enquiry_dtls
+                                WHERE
+                                        company_code = iv_v_company_code AND enquiry_number = iv_v_enquiry_number AND cibil_req_no IS NULL
+                                FETCH FIRST ROW ONLY
+                            ),
+                            'N'
+                        ) --Patch Added By Vigneshwaran K for CL1870_2 on 23-Jul-2020
+                    INTO
+                        lv_v_enq_exists,
+                        lv_v_cibil_unavail
+                    FROM
+                        ps_tb_cam_application_dtls
+                    WHERE
+                            company_code = iv_v_company_code AND enquiry_number = iv_v_enquiry_number
+                    FETCH FIRST ROW ONLY;
 
-@Service
-public class CarLoanService {
+                EXCEPTION
+                    WHEN no_data_found THEN
+                        lv_v_enq_exists := 'N';
+                        lv_v_cibil_unavail := NULL;
+                    WHEN too_many_rows THEN
+                        lv_v_enq_exists := 'Y';
+                    WHEN OTHERS THEN
+                        ov_v_error_code := ps_pk_global_variables.pv_n_log_id;
+                        ov_v_error_type := 'S';
+                        ov_v_error_mesg := 'Error Occurred. Contact Admin. ID = '
+                                           || ps_pk_global_variables.pv_n_log_id;
+                        ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                               sqlcode,
+                                                               lv_v_log_stage,
+                                                               sqlerrm,
+                                                               'S'
+                        );
+                        RETURN;
+                END;
+            WHEN too_many_rows THEN
+                lv_v_enq_exists := 'Y';
+            WHEN OTHERS THEN
+                ov_v_error_code := ps_pk_global_variables.pv_n_log_id;
+                ov_v_error_type := 'S';
+                ov_v_error_mesg := 'Error Occurred. Contact Admin. ID = '
+                                   || ps_pk_global_variables.pv_n_log_id;
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                       sqlcode,
+                                                       lv_v_log_stage,
+                                                       sqlerrm,
+                                                       'S'
+                );
+                RETURN;
+        END;
 
-    private final CarDetailsRepository carDetailsRepository;
-    private final LoanEnquiryRepository loanEnquiryRepository;
+        -- Patch Added by Anish Kumar S on 06-03-2021
+        lv_v_log_stage := 'In Ps_Pk_Ln_Loan_Enquiry_Gen.Ps_Pr_Val_Enquiry_Data, Checking Application Status for Enquiry Number  - '
+                          || iv_v_enquiry_number;
+        BEGIN
+            SELECT
+                COUNT(*)
+            INTO lv_n_appl_status_cnt
+            FROM
+                ps_tb_cam_application_hdr  a,
+                ps_tb_cam_application_dtls b
+            WHERE
+                    a.company_code = b.company_code AND a.application_number = b.application_number AND application_status NOT IN ( 'C',
+                                                                                                                                'E',
+                                                                                                                                'B' ) AND enquiry_number = iv_v_enquiry_number;
 
-    @Autowired
-    public CarLoanService(CarDetailsRepository carDetailsRepository, LoanEnquiryRepository loanEnquiryRepository) {
-        this.carDetailsRepository = carDetailsRepository;
-        this.loanEnquiryRepository = loanEnquiryRepository;
-    }
+        EXCEPTION
+            WHEN OTHERS THEN
+                ov_v_error_code := ps_pk_global_variables.pv_n_log_id;
+                ov_v_error_type := 'S';
+                ov_v_error_mesg := 'Error Occurred. Contact Admin. ID = '
+                                   || ps_pk_global_variables.pv_n_log_id;
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                       sqlcode,
+                                                       lv_v_log_stage,
+                                                       sqlerrm,
+                                                       'S'
+                );
+                RETURN;
+        END;
+        -- Patch Added by Anish Kumar S on 06-03-2021
 
-    public CarDetails getCarDetails(Long carId) {
-        return carDetailsRepository.findById(carId).orElse(null);
-    }
+        IF (
+            (
+                nvl(
+                   lv_v_enq_exists,
+                   'N'
+                ) = 'Y' AND iv_v_mode_ind != 'R'
+            ) AND lv_n_appl_status_cnt <> 0
+        ) OR (
+            iv_v_mode_ind = 'R' AND nvl(
+                                       lv_v_cibil_unavail,
+                                       '~'
+                                    ) = 'N'
+        ) THEN --Patch Added By Vigneshwaran K for CL1870_2 on 23-Jul-2020
+            ov_v_error_code := 'LN3713'; --Loan Application Created for the Given Enquiry No. Cannot Modify.
+            ov_v_error_type := 'E';
+            ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+            ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                   ov_v_error_code,
+                                                   lv_v_log_stage,
+                                                   ov_v_error_mesg,
+                                                   'E'
+            );
+            RETURN;
+        END IF;
 
-    public LoanEnquiry getLoanEnquiry(Long customerId) {
-        return loanEnquiryRepository.findById(customerId).orElse(null);
-    }
-}
+        IF iv_v_mode_ind IN ( 'R',
+                              'M' ) THEN
+            BEGIN
+                lv_v_log_stage := 'Checking whether the enquiry number is valid for the input company code '
+                                  || iv_v_company_code
+                                  || ' Enquiry Number '
+                                  || iv_v_enquiry_number;
+                SELECT
+                    branch_code,
+                    enquiry_status,
+                    hunter_result,
+                    hunter_verification_result,
+                    cibil_status,
+                    --Start Patch added by Kalaivani B for CL1720 on 22-03-2020
+                    sherlock_result,
+                    sherlock_verification_result
+                    --End Patch added by Kalaivani B for CL1720 on 22-03-2020
+                INTO
+                    lv_v_branch_code,
+                    lv_v_enquiry_status,
+                    lv_v_hunter_status,
+                    lv_v_hunter_ver_status,
+                    lv_v_cibil_status,
+                    --Start Patch added by Kalaivani B for CL1720 on 22-03-2020
+                    lv_v_sherlock_status,
+                    lv_v_sherlock_ver_status
+                    --End Patch added by Kalaivani B for CL1720 on 22-03-2020
+                FROM
+                    ps_tb_ln_loan_enquiry_hdr
+                WHERE
+                        company_code = iv_v_company_code AND enquiry_number = iv_v_enquiry_number;
+        --         and enquiry_status ='PE';
 
+            EXCEPTION
+                WHEN no_data_found THEN
+                    ov_v_error_code := 'LN3770'; --Invalid Enquiry Number
+                    ov_v_error_type := 'E';
+                    ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+                    ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                           ov_v_error_code,
+                                                           lv_v_log_stage,
+                                                           ov_v_error_mesg,
+                                                           'E'
+                    );
+                    RETURN;
+                WHEN OTHERS THEN
+                    ov_v_error_code := ps_pk_global_variables.pv_n_log_id;
+                    ov_v_error_type := 'S';
+                    ov_v_error_mesg := 'Error Occurred. Contact Admin. ID = '
+                                       || ps_pk_global_variables.pv_n_log_id;
+                    ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                           sqlcode,
+                                                           lv_v_log_stage,
+                                                           sqlerrm,
+                                                           'S'
+                    );
+                    RETURN;
+            END;
 
+            lv_v_log_stage := 'checking whether the input branch code and enquiry branch code are same ';
+            IF iv_v_branch_code <> lv_v_branch_code THEN
+                ov_v_error_code := 'LN3781'; --Invalid Enquiry Branch.
+                ov_v_error_type := 'E';
+                ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                       ov_v_error_code,
+                                                       lv_v_log_stage,
+                                                       ov_v_error_mesg,
+                                                       'E'
+                );
+                RETURN;
+            END IF;
 
-CarLoanController
+        END IF;
 
+--CL1870_2
 
+        BEGIN
+            SELECT
+                'Y'
+            INTO lv_v_applnt_exists
+            FROM
+                ps_tb_ln_loan_enquiry_dtls
+            WHERE
+                    company_code = iv_v_company_code AND enquiry_number = iv_v_enquiry_number AND applicant_status IN ( 'APC',
+                                                                                                                    'ANC' )
+            FETCH FIRST ROW ONLY;
 
-The bean 'carDetailsRepository', defined in in.sis.fetch.repository.CarDetailsRepository defined in @EnableJpaRepositories declared on JpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration, could not be registered. A bean with that name has already been defined in in.sis.fetch.repository.CarDetailsRepository defined in @EnableJdbcRepositories declared on JdbcRepositoriesRegistrar.EnableJdbcRepositoriesConfiguration and overriding is disabled.
+        EXCEPTION
+            WHEN no_data_found THEN
+                lv_v_applnt_exists := 'N';
+            WHEN OTHERS THEN
+                ov_v_error_code := ps_pk_global_variables.pv_n_log_id;
+                ov_v_error_type := 'S';
+                ov_v_error_mesg := 'Error Occurred. Contact Admin. ID = '
+                                   || ps_pk_global_variables.pv_n_log_id;
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                       sqlcode,
+                                                       lv_v_log_stage,
+                                                       sqlerrm,
+                                                       'S'
+                );
+                RETURN;
+        END;
 
+        IF
+            iv_v_mode_ind = 'M' AND nvl(
+                                       lv_v_applnt_exists,
+                                       'N'
+                                    ) = 'N'
+        THEN
+            ov_v_error_code := 'LN4926'; --Enquiry closed. Not allowed to modify.
+            ov_v_error_type := 'E';
+            ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+            ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                   ov_v_error_code,
+                                                   lv_v_log_stage,
+                                                   ov_v_error_mesg,
+                                                   'E'
+            );
+            RETURN;
+        END IF;
+--CL1870_2
 
-package com.example.demo.controller;
+        IF
+            iv_v_mode_ind = 'M' AND (
+                lv_v_hunter_status = 'HT' AND nvl(
+                    lv_v_hunter_ver_status,
+                    'FA'
+                )
+        --Start Patch added by Kalaivani B for CL1720 on 22-03-2020
+                 IN ( 'FA',
+                       'F' )
+            )
+        OR (
+            lv_v_sherlock_status = 'RE' AND nvl(
+                                               lv_v_sherlock_ver_status,
+                                               'F'
+                                            ) = 'F'
+        )
+        --End Patch added by Kalaivani B for CL1720 on 22-03-2020
+         THEN
+            lv_v_log_stage := 'Checking whether input enquiry number is a hunter hit case ';
+            ov_v_error_code := 'LN3785'; --Hunter Verification Is Under Process For This Enquiry Number.
+            ov_v_error_type := 'E';
+            ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+            ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                   ov_v_error_code,
+                                                   lv_v_log_stage,
+                                                   ov_v_error_mesg,
+                                                   'E'
+            );
+            RETURN;
+        END IF;
+--Commented By Vigneshwaran K for CL1870_2 on 23-Jul-2020
+/*
+--Patch added by Vigneshwaran K for CL1702 on 03-Mar-2020
+IF iv_v_mode_ind = 'R'
+THEN
+  BEGIN
+      SELECT 'Y', a.cust_conf_ind, a.sms_ind
+      INTO lv_v_exists, lv_v_conf_ind, lv_v_usr_sms_ind
+      FROM ps_tb_ln_loan_enquiry_hdr a
+      WHERE a.company_code = iv_v_company_code
+       AND a.enquiry_number = iv_v_enquiry_number
+       AND a.sms_ind IS NOT NULL;
 
-import com.example.demo.model.CarDetails;
-import com.example.demo.model.LoanEnquiry;
-import com.example.demo.service.CarLoanService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+  EXCEPTION
+      WHEN OTHERS THEN
+        lv_v_exists := 'N';
+        lv_v_conf_ind := NULL;
+        lv_v_usr_sms_ind := NULL;
+  END;
 
-@RestController
-@RequestMapping("/api/v1")
-public class CarLoanController {
+  IF NVL(lv_v_exists,'N') = 'Y'
+  THEN
+      IF lv_v_conf_ind IS NULL AND nvl(lv_v_usr_sms_ind,'~') = 'Y'
+      THEN
+        ov_v_error_code := 'LN4424'; --Enquiry Number is pending with customer.
+        ov_v_error_type := 'E';
+        ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+        ps_pk_error_log.ps_pr_insert_error_mesg(ov_v_error_code,lv_v_log_stage,ov_v_error_mesg,'E');
+        RETURN;
+       ELSIF nvl(lv_v_conf_ind,'~') = 'N' AND nvl(lv_v_usr_sms_ind,'~') = 'Y'
+      THEN
+        ov_v_error_code := 'LN4425'; --Enquiry Number is cancelled by customer.
+        ov_v_error_type := 'E';
+        ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+        ps_pk_error_log.ps_pr_insert_error_mesg(ov_v_error_code,lv_v_log_stage,ov_v_error_mesg,'E');
+        RETURN;
+       ELSIF nvl(lv_v_usr_sms_ind,'~') = 'N'
+      THEN
+        ov_v_error_code := 'LN4426'; --Enquiry Number is pending with user for customer consent.
+        ov_v_error_type := 'E';
+        ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+        ps_pk_error_log.ps_pr_insert_error_mesg(ov_v_error_code,lv_v_log_stage,ov_v_error_mesg,'E');
+        RETURN;
+       END IF;
+  END IF;
+END IF;
+--Patch ended by Vigneshwaran K for CL1702 on 03-Mar-2020
+*/
 
-    private final CarLoanService carLoanService;
+        IF iv_v_mode_ind = 'R' THEN
+            IF lv_v_cibil_status = 'S' THEN
+                ov_v_error_code := 'LN3786'; --CIBIL Bureau Request is Under Process for this Enquiry Number
+                ov_v_error_type := 'E';
+                ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                       ov_v_error_code,
+                                                       lv_v_log_stage,
+                                                       ov_v_error_mesg,
+                                                       'E'
+                );
+                RETURN;
+            END IF;
 
-    @Autowired
-    public CarLoanController(CarLoanService carLoanService) {
-        this.carLoanService = carLoanService;
-    }
+            lv_v_ind_ext := 'N';
+            BEGIN
+                lv_v_log_stage := 'checking whether atleast one individual constitution type is available for the input company code '
+                                  || iv_v_company_code
+                                  || ' Enquiry Number '
+                                  || iv_v_enquiry_number;
+                SELECT
+                    'Y'
+                INTO lv_v_ind_ext
+                FROM
+                    ps_tb_ln_loan_enquiry_dtls
+                WHERE
+                        company_code = iv_v_company_code AND enquiry_number = iv_v_enquiry_number AND constitution_type = 'INDIVIDUAL' AND ROWNUM < 2;
 
-    @GetMapping("/car-details/{id}")
-    public CarDetails getCarDetails(@PathVariable Long id) {
-        return carLoanService.getCarDetails(id);
-    }
+            EXCEPTION
+                WHEN no_data_found THEN
+                    lv_v_ind_ext := 'N';
+                WHEN OTHERS THEN
+                    ov_v_error_code := ps_pk_global_variables.pv_n_log_id;
+                    ov_v_error_type := 'S';
+                    ov_v_error_mesg := 'Error Occurred. Contact Admin. ID = '
+                                       || ps_pk_global_variables.pv_n_log_id;
+                    ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                           sqlcode,
+                                                           lv_v_log_stage,
+                                                           sqlerrm,
+                                                           'S'
+                    );
+                    RETURN;
+            END;
 
-    @GetMapping("/loan-enquiry/{id}")
-    public LoanEnquiry getLoanEnquiry(@PathVariable Long id) {
-        return carLoanService.getLoanEnquiry(id);
-    }
-}
+            IF lv_v_ind_ext <> 'Y' THEN
+                ov_v_error_code := 'LN3780'; --Atleast One Applicant Should Be Individual For the Enquiry Number ~1
+                ov_v_error_type := 'E';
+                ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(
+                                                                       ov_v_error_code,
+                                                                       iv_v_enquiry_number,
+                                                                       NULL,
+                                                                       NULL,
+                                                                       NULL,
+                                                                       NULL
+                                   );
+
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                       ov_v_error_code,
+                                                       lv_v_log_stage,
+                                                       ov_v_error_mesg,
+                                                       'E'
+                );
+                RETURN;
+            END IF;
+
+            IF (
+                lv_v_hunter_status = 'HT' AND nvl(
+                    lv_v_hunter_ver_status,
+                    'FA'
+                )
+            --Start Patch added by Kalaivani B for CL1720 on 22-03-2020
+                 IN ( 'FA',
+                       'F' )
+            ) OR (
+                lv_v_sherlock_status = 'RE' AND nvl(
+                                                   lv_v_sherlock_ver_status,
+                                                   'F'
+                                                ) = 'F'
+            )--End Patch added by Kalaivani B for CL1720 on 22-03-2020
+             THEN
+                ov_v_error_code := 'LN3782'; --Hunter Verification Is Not Completed
+                ov_v_error_type := 'E';
+                ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(ov_v_error_code);
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                                                       ov_v_error_code,
+                                                       lv_v_log_stage,
+                                                       ov_v_error_mesg,
+                                                       'E'
+                );
+                RETURN;
+            END IF;
+/*
+            IF lv_v_enquiry_status <> 'PE' ---lv_v_cibil_status = 'A'--
+
+             THEN
+                ov_v_error_code := 'LN3783'; --Bureau Request Already generated for this Enquiry Number.
+                ov_v_error_type := 'E';
+                ov_v_error_mesg := ps_pk_error_log.ps_fn_get_error_text(
+                    ov_v_error_code,
+                    iv_v_enquiry_number,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL
+                );
+
+                ps_pk_error_log.ps_pr_insert_error_mesg(
+                    ov_v_error_code,
+                    lv_v_log_stage,
+                    ov_v_error_mesg,
+                    'E'
+                );
+                return;
+            END IF;
+*/ --CL1870_2
+
+        END IF;
+
+        ps_pk_error_log.ps_pr_close_error_log('Ps_Pk_Ln_Loan_Enquiry_Gen.Ps_Pr_Val_Enquiry_Data Ends');
+    END ps_pr_val_enquiry_data;
+/
